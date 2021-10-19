@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>purrr and other forms of iteration in R</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Till Krenz" />
+    <meta name="author" content="R USERS GAINESVILLE" />
+    <meta name="date" content="2021-10-19" />
+    <script src="purrr_presentation_files/header-attrs/header-attrs.js"></script>
+    <link rel="stylesheet" href="xaringan-themer.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# <code>purrr</code> and other forms of iteration in <code>R</code>
+## 🐈
+### Till Krenz
+### R USERS GAINESVILLE
+### 2021-10-19
+
+---
+
+
+
+
+
+
+
+
+
+&lt;style type="text/css"&gt;
+.haskell {
+  font-variant-ligatures: none;
+}
+&lt;/style&gt;
+
+# Operating on lists
+
+
+```r
+l1 &lt;- list("R USERS GNV", c(999, 1337), Sys.Date())
+l1
+```
+
+```
+## [[1]]
+## [1] "R USERS GNV"
+## 
+## [[2]]
+## [1]  999 1337
+## 
+## [[3]]
+## [1] "2021-10-19"
+```
+
+- can be very complex and deeply nested
+- `list`s can contain elements of different types
+
+
+```r
+map_chr(l1, class)
+```
+
+```
+## [1] "character" "numeric"   "Date"
+```
+
+
+---
+
+## Contents
+
+1. Introduction and Notes
+2. Functional Programing
+3. Forms of Iteration in R
+4. purrr `map*()`-functions
+5. purrr's ecosystem relevance
+6. other useful purrr functions
+7. `purrr` + `future` = `furrr`
+8. Code Examples
+
+---
+class: inverse
+background-image: url('https://raw.githubusercontent.com/allisonhorst/stats-illustrations/master/rstats-artwork/purrr_cat.png')
+background-size: contain
+
+# purrr feels like
+
+Illustration by [Allison Horst](https://github.com/allisonhorst/stats-illustrations)
+
+
+
+---
+
+### Notes On Code Cosmetics
+
+#### Ligatures
+
+##### Ligatures: OFF
+
+&lt;span style = "font-variant-ligatures: none; font-family: 'Fira Sans'; font-size: 1.5em;"&gt;Difficult waffles&lt;/span&gt;
+
+```haskell
+&lt;- |&gt; %&gt;% != == &gt;= &lt;=
+```
+
+##### Ligatures: ON
+
+&lt;span style = "font-variant-ligatures: normal; font-family: 'Fira Sans'; font-size: 1.5em;"&gt;Difficult waffles&lt;/span&gt;
+
+
+```r
+&lt;- |&gt; %&gt;% != == &gt;= &lt;=
+```
+
+- [FiraCode](https://github.com/tonsky/FiraCode)
+- [JetBrains Mono](https://www.jetbrains.com/lp/mono/)
+- [CSS: font-variant-ligatures](https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-ligatures)
+---
+
+### Notes On Code Cosmetics
+
+#### magrittr pipe vs base pipe
+
+##### Code without Pipe
+
+
+```r
+f(x)
+```
+
+#####  magrittr pipe
+
+
+```r
+x %&gt;% f()
+```
+
+#####  base pipe (R&gt;=4.1.0)
+
+
+```r
+x |&gt; f()
+```
+
+---
+
+### Data for examples
+
+Let's use some penguin data ([palmerpenguins](https://allisonhorst.github.io/palmerpenguins/)).
+
+
+```r
+library(tidyverse)
+library(palmerpenguins)
+penguins
+```
+
+```
+## # A tibble: 344 × 8
+##    species island    bill_length_mm bill_depth_mm flipper_length_mm body_mass_g
+##    &lt;fct&gt;   &lt;fct&gt;              &lt;dbl&gt;         &lt;dbl&gt;             &lt;int&gt;       &lt;int&gt;
+##  1 Adelie  Torgersen           39.1          18.7               181        3750
+##  2 Adelie  Torgersen           39.5          17.4               186        3800
+##  3 Adelie  Torgersen           40.3          18                 195        3250
+##  4 Adelie  Torgersen           NA            NA                  NA          NA
+##  5 Adelie  Torgersen           36.7          19.3               193        3450
+##  6 Adelie  Torgersen           39.3          20.6               190        3650
+##  7 Adelie  Torgersen           38.9          17.8               181        3625
+##  8 Adelie  Torgersen           39.2          19.6               195        4675
+##  9 Adelie  Torgersen           34.1          18.1               193        3475
+## 10 Adelie  Torgersen           42            20.2               190        4250
+## # … with 334 more rows, and 2 more variables: sex &lt;fct&gt;, year &lt;int&gt;
+```
+
+---
+
+### Notes On Code Cosmetics
+
+#### magrittr pipe vs base pipe
+
+##### Code without Pipe
+
+
+```r
+p1 &lt;- filter(penguins, sex == "female")
+p2 &lt;- group_by(p1, island)
+summarise(p2, `avg. body mass (in g)` = mean(body_mass_g))
+```
+
+##### magrittr pipe
+
+
+```r
+penguins %&gt;% 
+  filter(sex == "female") %&gt;% 
+  group_by(island) %&gt;% 
+  summarise(`avg. body mass (in g)` = mean(body_mass_g))
+```
+
+---
+
+##### base pipe (R&gt;=4.1.0)
+
+
+```r
+penguins |&gt; 
+  filter(sex == "female") |&gt; 
+  group_by(island) |&gt; 
+  summarise(`avg. body mass (in g)` = mean(body_mass_g))
+```
+
+```
+## # A tibble: 3 × 2
+##   island    `avg. body mass (in g)`
+##   &lt;fct&gt;                       &lt;dbl&gt;
+## 1 Biscoe                      4319.
+## 2 Dream                       3446.
+## 3 Torgersen                   3396.
+```
+
+---
+
+## Anonymous Functions
+
+
+
+```r
+function(x) {x ...}
+```
+
+- useful if a functions is only used once
+  - very useful for implicit iteration, as with `base::lapply()` or `purrr::map()`, etc.
+
+
+
+```r
+\(x) {x ...}
+```
+
+- shorthand for `function(x) {x ...}`
+- available since R 4.1.0
+- more concise, less clutter
+- improves code readability
+
+
+```r
+~{.x ...}
+```
+
+- purrr-style or lambda-style shorthand for `function(x) {x ...}`
+- used a lot within the `tidyverse` (`across()`, `group_map()`, `group_modify()`, ...)
+- automatically maps up to three arguments to the pre-defined names .x, .y, .z
+
+
+---
+
+## Functional Programming
+
+- programming paradigm
+  - modern programming languages are multi-paradigm languages
+  - R: procedural, object-oriented, **functional**, reflective, imperative, array ([wikipedia.org](https://en.wikipedia.org/wiki/R_(programming_language))
+&gt; "Functional programming is sometimes treated as synonymous with purely functional programming, a subset of functional programming which treats all functions as deterministic mathematical functions, or **pure functions**. When a pure function is called with some given arguments, it will always return the same result, and cannot be affected by any **mutable state** or other **side effects**." [wikipedia.org](https://en.wikipedia.org/wiki/Functional_programming)
+- program flow is facilitated with conditions (if ... else, switch, ifelse, case_when) and iterations (for, while, until, ...)
+- `for`-loops are impure functions, as they depend on and interact with their context
+- in the functional paradigm looping or iterating is done with functions like `map`
+  - declarative instead of imperative programming style
+    - explicit
+    - transparent
+    - concise
+
+---
+
+## `for`-loops and *impurity* 
+
+##### `for`-loops alone can be considered *pure*
+
+
+```r
+for(i in 1:10) {
+  cat(i)
+}
+```
+
+```
+## 12345678910
+```
+
+##### getting data into and out of a `for` loop makes them impure
+
+
+```r
+p1 &lt;- penguins |&gt; split(~species)
+
+res &lt;- numeric()
+for(i in 1:length(p1)) {
+  res[[i]] &lt;- mean(p1[[i]]$bill_length_mm, na.rm = TRUE)
+}
+res
+```
+
+```
+## [1] 38.79139 48.83382 47.50488
+```
+
+---
+
+## `for`-loops and *impurity* 
+
+##### Same operation with `purrr::map()`
+
+
+```r
+res &lt;- map_dbl(p1, \(x) mean(x$bill_length_mm, na.rm = TRUE))
+res
+```
+
+```
+##    Adelie Chinstrap    Gentoo 
+##  38.79139  48.83382  47.50488
+```
+
+
+---
+### Forms of iteration in (base) R
+
+#### Vectorization
+
+- only works with vectors
+- fast: only type of vector needs to be checked instead of type of each individual value
+
+#### Recursion
+
+- functions calling themselves
+- usually considered more confusing than other forms of iteration
+- [Tail Recursion in R with Trampolines](https://tailrecursion.com/wondr/posts/tail-recursion-in-r.html)
+
+#### functionals
+
+- `lapply()`, `sapply()`, `vapply()`, `tapply()`, `rapply()`, `Map()`, `Reduce()`, `aggregate()`
+- purrr functions replace those with a more coherent set of functions
+
+#### loops
+
+- `for()`, `while()`: used to be slower in R
+- less readable code + impure
+
+---
+
+## Forms of iteration in (base) R
+
+#### Vectorization
+
+
+```r
+1:4 * 2
+```
+
+```
+## [1] 2 4 6 8
+```
+
+
+```r
+paste("R is", c("fun", "cool", "useful", "meow"))
+```
+
+```
+## [1] "R is fun"    "R is cool"   "R is useful" "R is meow"
+```
+
+---
+
+## Forms of iteration in (base) R
+
+#### Recursion
+
+
+```r
+find_first_even &lt;- function(x) {
+  if(x[1] %% 2 == 0) return(x[1]) 
+  else find_first_even(x[-1])
+}
+
+find_first_even(c(1,3,7,8,13,244))
+```
+
+```
+## [1] 8
+```
+
+[Tail Recursion in R with Trampolines](https://tailrecursion.com/wondr/posts/tail-recursion-in-r.html)
+
+---
+
+## purrr's `map*()` functions
+
+- `map()` drop-in replacement for `lapply()`, applies function `.f` to each element of a `list` or `vector`
+- `map2()` takes two `list`s or `vector`s and iterates through them them simultaneously, applying the function `.f` to each pair of elements
+- `pmap()` takes a `list` of `list`s 
+- `imap()` indexed version of `map()`, `.f` takes two arguments, elements and element number
+- suffixes determine the type of output:
+  - `map_dbl()` returns a `numeric` (double) vector
+  - `map_chr()` returns a `character` vector
+  - `map_lgl()` returns a `logical` vector
+  - `map_df()` binds the results into a `data.frame`
+  
+---
+
+## purrr's `map*()` functions
+
+<div id="qmwchsiptf" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#qmwchsiptf .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#qmwchsiptf .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 6px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#qmwchsiptf .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#qmwchsiptf .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#qmwchsiptf .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#qmwchsiptf .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#qmwchsiptf .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#qmwchsiptf .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#qmwchsiptf .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#qmwchsiptf .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#qmwchsiptf .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#qmwchsiptf .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#qmwchsiptf .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#qmwchsiptf .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#qmwchsiptf .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#qmwchsiptf .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#qmwchsiptf .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#qmwchsiptf .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#qmwchsiptf .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#qmwchsiptf .gt_left {
+  text-align: left;
+}
+
+#qmwchsiptf .gt_center {
+  text-align: center;
+}
+
+#qmwchsiptf .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#qmwchsiptf .gt_font_normal {
+  font-weight: normal;
+}
+
+#qmwchsiptf .gt_font_bold {
+  font-weight: bold;
+}
+
+#qmwchsiptf .gt_font_italic {
+  font-style: italic;
+}
+
+#qmwchsiptf .gt_super {
+  font-size: 65%;
+}
+
+#qmwchsiptf .gt_footnote_marks {
+  font-style: italic;
+  font-weight: normal;
+  font-size: 65%;
+}
+</style>
+<table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">prefix/suffix</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">chr</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">dbl</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">int</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">lgl</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">raw</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">df</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">dfc</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">dfr</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr><td class="gt_row gt_left">map()</td>
+<td class="gt_row gt_left">map_chr()</td>
+<td class="gt_row gt_left">map_dbl()</td>
+<td class="gt_row gt_left">map_int()</td>
+<td class="gt_row gt_left">map_lgl()</td>
+<td class="gt_row gt_left">map_raw()</td>
+<td class="gt_row gt_left">map_df()</td>
+<td class="gt_row gt_left">map_dfc()</td>
+<td class="gt_row gt_left">map_dfr()</td></tr>
+    <tr><td class="gt_row gt_left">map2()</td>
+<td class="gt_row gt_left">map2_chr()</td>
+<td class="gt_row gt_left">map2_dbl()</td>
+<td class="gt_row gt_left">map2_int()</td>
+<td class="gt_row gt_left">map2_lgl()</td>
+<td class="gt_row gt_left">map2_raw()</td>
+<td class="gt_row gt_left">map2_df()</td>
+<td class="gt_row gt_left">map2_dfc()</td>
+<td class="gt_row gt_left">map2_dfr()</td></tr>
+    <tr><td class="gt_row gt_left">pmap()</td>
+<td class="gt_row gt_left">pmap_chr()</td>
+<td class="gt_row gt_left">pmap_dbl()</td>
+<td class="gt_row gt_left">pmap_int()</td>
+<td class="gt_row gt_left">pmap_lgl()</td>
+<td class="gt_row gt_left">pmap_raw()</td>
+<td class="gt_row gt_left">pmap_df()</td>
+<td class="gt_row gt_left">pmap_dfc()</td>
+<td class="gt_row gt_left">pmap_dfr()</td></tr>
+    <tr><td class="gt_row gt_left">imap()</td>
+<td class="gt_row gt_left">imap_chr()</td>
+<td class="gt_row gt_left">imap_dbl()</td>
+<td class="gt_row gt_left">imap_int()</td>
+<td class="gt_row gt_left">imap_lgl()</td>
+<td class="gt_row gt_left">imap_raw()</td>
+<td class="gt_row gt_left">invoke_map_df()</td>
+<td class="gt_row gt_left">imap_dfc()</td>
+<td class="gt_row gt_left">imap_dfr()</td></tr>
+    <tr><td class="gt_row gt_left">invoke()</td>
+<td class="gt_row gt_left">invoke_map_chr()</td>
+<td class="gt_row gt_left">invoke_map_dbl()</td>
+<td class="gt_row gt_left">invoke_map_int()</td>
+<td class="gt_row gt_left">invoke_map_lgl()</td>
+<td class="gt_row gt_left">invoke_map_raw()</td>
+<td class="gt_row gt_left">invoke_map_df()</td>
+<td class="gt_row gt_left">invoke_map_dfc()</td>
+<td class="gt_row gt_left">invoke_map_dfr()</td></tr>
+  </tbody>
+  
+  
+</table>
+</div>
+
+Also there are:
+ 
+- `lmap()` strongly typed version of map, operates only on functions that take *and* return lists
+- `map_at()` applies `.f` only to indexed elements of `.x`
+- `map_if()` applies `.f` only to elements of `.x` that fullfil the condition `.p`
+- `map_depth()` applies `.f` only to depth level of `.x`
+
+---
+
+## purrr reverse dependencies
+
+- reverse dependency: When another R-Package lists an R-Package as an Import, Suggest, or Depends
+
+&lt;img src="purrr_presentation_files/figure-html/unnamed-chunk-23-1.png" width="100%" /&gt;
+
+---
+
+## purrr reverse dependencies
+
+&lt;img src="purrr_presentation_files/figure-html/unnamed-chunk-24-1.png" width="100%" /&gt;
+
+---
+
+## purrr reverse dependencies
+
+&lt;img src="purrr_presentation_files/figure-html/unnamed-chunk-25-1.png" width="100%" /&gt;
+ 
+---
+
+## Other useful `purrr` functions:
+
+- `pluck()`, can be used instead of base R double-bracket indexing, `chuck()` is a more strict version of `pluck()`, errs on NULL elements
+
+
+```r
+l1[[2]]
+```
+
+```
+## [1]  999 1337
+```
+
+```r
+pluck(l1, 2)
+```
+
+```
+## [1]  999 1337
+```
+
+- `keep()` and `discard()` are like `dplyr::filter()` for lists. `.p` is a predicate/ condition that an element needs to fullfil in order to be kept or discarded
+- `every()`, `some()`, and `none()` evaluate a predicate `.p` on each list element and return `TRUE` if all, some or none of the elements evaluate to TRUE
+
+ 
+---
+
+## Other useful `purrr` functions:
+
+`possibly()` and `safely()` provide exception handling 
+
+- If one of the elements causes function `.f` to throw an error, `map*()` functions fail and stop the execution of further code.
+
+
+```r
+map(l1, sum)
+```
+
+```
+## Error in .Primitive("sum")(..., na.rm = na.rm): invalid 'type' (character) of argument
+```
+
+- exception handling means that instead of stopping execution, the error is captured and the execution of the code is continued
+- `possibly()` allows us to define a value to return, whenever the `.f` fails on an element
+
+
+```r
+map_dbl(l1, possibly(.f = sum, otherwise =  NA))
+```
+
+```
+## [1]   NA 2336   NA
+```
+- `safely()` works very similar but instead returns a `list` with the elements `$result` and `$error`
+
+
+---
+
+# `purrr` + `future` = `furrr`
+
+- `furrr` is an extension of `purrr` that makes it straight forward to parallelize code written with `purrr`'s `map*()`-functions
+
+
+```r
+library(furrr)
+plan(multisession, workers = 4)
+res &lt;- future_map(1:4, rnorm, n = 10)
+```
+
+- this code will run in parallel on 4 CPU cores
+- deploy your code to hiperGator easily
+
+---
+
+# A few final tips on iteration in R
+
+- always make sure that the elements you want to iterate on are in a list of vector
+- use vectorization whenever possible, it will be faster
+- use loops only if you need to iterate in an accumulative fashion (alternative `lambda.tools::fold()`)
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"slideNumberFormat": "%current%",
+"highlightStyle": "github",
+"highlightLines": true,
+"ratio": "16:9",
+"countIncrementalSlides": true
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
